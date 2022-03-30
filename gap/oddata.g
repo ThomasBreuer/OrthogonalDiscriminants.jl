@@ -534,13 +534,12 @@ end;
 ##    print messages about inconsistencies
 ##
 ##  - "replace":
-##    change all values withour signaling an error
+##    change all values without signaling an error
 ##
 ##  The default for <mode> is "error".
 ##
 OD_enter_value:= function( name, p, charnr, val, origin, mode... )
     local pos, simpname, data, entry, F;
-Print( "call with ", [ name, p, charnr, val, origin, mode ], "\n" );
 
     pos:= Position( name, '.' );
     if pos = fail then

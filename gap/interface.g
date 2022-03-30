@@ -431,8 +431,8 @@ end;
 ##    a string that describes how the value arises
 ##
 OrthogonalDiscriminantInfo:= function( chi... )
-    local tbl, p, irr, dec, ind, deg, F, result, galoisinfo, i, known, pos,
-          FF, g, img, val;
+    local tbl, p, irr, dec, ind, deg, F, result, galoisinfo, i, known, value,
+          pos, FF, g, img, val;
 
     if Length( chi ) = 1 and IsClassFunction( chi[1] ) then
       tbl:= UnderlyingCharacterTable( chi[1] );
@@ -480,17 +480,28 @@ OrthogonalDiscriminantInfo:= function( chi... )
         # Choose a Galois compatible discriminant.
         known:= First( result, r -> r.position = galoisinfo[i][1] );
         if known <> fail then
+          if known.value = fail then
+            value:= fail;
+          else
+            value:= GaloisCyc( known.value, galoisinfo[i][2] );
+          fi;
           Add( result, rec( position:= i,
-                            value:= GaloisCyc( known.value, galoisinfo[i][2] ),
+                            value:= value,
                             field:= known.field,
                             why:= Concatenation( "Galois conjugate ",
                                       String( galoisinfo[i] ) ) ) );
         else
-          known:= First( result, r -> r.position[1] = galoisinfo[i][1] );
+          known:= First( result, r -> IsList( r.position ) and
+                                      r.position[1] = galoisinfo[i][1] );
           pos:= Position( irr, ComplexConjugate( irr[i] ) );
           if i < pos then
+            if known.value = fail then
+              value:= fail;
+            else
+              value:= GaloisCyc( known.value, galoisinfo[i][2] );
+            fi;
             Add( result, rec( position:= [ i, pos ],
-                              value:= GaloisCyc( known.value, galoisinfo[i][2] ),
+                              value:= value,
                               field:= known.field,
                               why:= Concatenation( "Galois conjugate ",
                                         String( galoisinfo[i] ) ) ) );
