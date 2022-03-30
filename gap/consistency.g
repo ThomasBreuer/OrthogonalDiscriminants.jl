@@ -2,17 +2,26 @@
 ##
 #F  OD_CheckPermutationCharacters( <name> )
 ##
-##  Collect the information about irreducible characters 'chi' that are
-##  relevant for the database, such that 'chi + 1' is a permutation
-##  character of degree $n$.
+##  - Collect the information about irreducible characters 'chi' that are
+##    relevant for the database, such that 'chi + 1' is a permutation
+##    character of degree $n$.
 ##
-##  The determinant of the bilinear form for 'chi' is 'n',
-##  this yields a result in each characteristic not dividing $n$.
-##  Here we check only characteristic zero, possible new information in
-##  finite characteristic will be regarded as derived from the ordinary OD.
+##    The determinant of the bilinear form for 'chi' is 'n',
+##    this yields a result in each characteristic not dividing $n$.
+##    Here we check only characteristic zero, possible new information in
+##    finite characteristic will be regarded as derived from the ordinary OD.
+##
+##  - Collect the information about orthogonal irreducible characters 'chi'
+##    that are relevant for the database, such that 'chi(1) + 1' is the order
+##    of a Sylow 'p'-subgroup P of the given group, for an odd prime 'p',
+##    and 'chi + 1' vanishes on the nonidentity elements of P.
+##
+##    Then the restriction of 'chi' to P is orthogonally stable with
+##    determinant 'chi(1) + 1'.
 ##
 OD_CheckPermutationCharacters:= function( name )
-    local result, t, sname, s, pi, chi, pos, OD, entry, stored, info, n;
+    local result, t, sname, s, pi, chi, pos, OD, entry, stored, info, n,
+          pair, p, q, pclasses;
 
     result:= [];
 
@@ -38,6 +47,27 @@ OD_CheckPermutationCharacters:= function( name )
         fi;
       od;
     fi;
+
+    for pair in Collected( Factors( Size( t ) ) ) do
+      p:= pair[1];
+      q:= p^pair[2];
+      if p <> 2 then
+        pclasses:= PositionsProperty( OrdersClassRepresentatives( t ),
+                       x -> x mod p = 0 and IsPrimePowerInt( x ) );
+        for chi in Filtered( Irr( t ),
+                       x -> x[1] + 1 = q and Set( x{ pclasses } ) = [ -1 ] ) do
+          if Indicator( t, [ chi ], 2 ) = [ 1 ] then
+            OD:= OD_SquareFreePart( q );
+            if chi[1] mod 4 = 2 then
+              OD:= -OD;
+            fi;
+            OD:= String( OD );
+            pos:= Position( Irr( t ), chi );
+            Add( result, [ name, 0, pos, OD, "permchar" ] );
+          fi;
+        od;
+      fi;
+    od;
 
     return result;
 end;
