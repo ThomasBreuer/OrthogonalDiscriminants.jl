@@ -512,20 +512,49 @@ end;
 
 #############################################################################
 ##
-#F  OD_enter_value( <name>, <p>, <charnr>, <val>, <origin> )
+#F  OD_enter_value( <name>, <p>, <charnr>, <val>, <origin>[, <mode>] )
 ##
 ##  Change 'OD_data' such that the entry given by the arguments gets set;
 ##  <origin> gets appended to the origin string of the entry if this
 ##  information is new.
 ##
-OD_enter_value:= function( name, p, charnr, val, origin )
-    local pos, simpname, data, entry;
+##  <val> must be a *string* that describes the OD in question.
+##
+##  If <mode> is given then it determines how to handle inconsistencies,
+##  that is, an attempt to replace a known value by a different one.
+##  Supported values are
+##
+##  - "error":
+##    signal an error in case of an inconsistency
+##    (before changing the value in question)
+##
+##  - "test":
+##    do not change any value,
+##    do not signal errors,
+##    print messages about inconsistencies
+##
+##  - "replace":
+##    change all values withour signaling an error
+##
+##  The default for <mode> is "error".
+##
+OD_enter_value:= function( name, p, charnr, val, origin, mode... )
+    local pos, simpname, data, entry, F;
+Print( "call with ", [ name, p, charnr, val, origin, mode ], "\n" );
 
     pos:= Position( name, '.' );
     if pos = fail then
       simpname:= name;
     else
       simpname:= name{ [ 1 .. pos-1 ] };
+    fi;
+
+    if Length( mode ) = 0 then
+      mode:= "error";
+    elif mode[1] in [ "error", "replace", "test" ] then
+      mode:= mode[1];
+    else
+      Error( "<mode> must be one of \"error\", \"replace\", \"test\"" );
     fi;
 
     if not IsBound( OD_data.( simpname ) ) then
@@ -552,22 +581,76 @@ OD_enter_value:= function( name, p, charnr, val, origin )
             "cannot store info about character '", pos, "'" );
       return false;
     fi;
-    if entry[3] <> "?" and entry[3] <> val then
-      Info( InfoOD, 1,
-            "replace value for '", name, "', p = ", p, ", char. ", charnr,
-            ": '", entry[3], "' -> '", val, "'" );
+    if entry[3] <> "?" then
+      # Do we want to replace a known value by another one?
+      if p > 0 then
+        if entry[3] <> val then
+          # The two values are incompatible.
+          Info( InfoOD, 1,
+                "replace value for '", name, "', p = ", p, ", char. ", charnr,
+                ": '", entry[3], "' -> '", val, "'" );
+          if mode = "error" then
+            Error( "inconsistency" );
+          fi;
+        fi;
+      elif AtlasIrrationality( entry[3] ) <> AtlasIrrationality( val ) then
+        # Perhaps the two values are in the same square class.
+        F:= CharacterField( Irr( CharacterTable( name ) )[ charnr ] );
+        if SquareRootInNumberField( F, AtlasIrrationality( entry[3] )
+               * AtlasIrrationality( val ) ) = fail then
+          # The two values are incompatible.
+          Info( InfoOD, 1,
+                "replace value for '", name, "', p = ", p, ", char. ", charnr,
+                ": '", entry[3], "' -> '", val, "', w.r.t. ", F );
+          if mode = "error" then
+            Error( "inconsistency" );
+          fi;
+        else
+          # Take the "nicer" string description, in the sense that
+          # it has a shorter string representation.
+          if Length( entry[3] ) <= Length( val ) then
+            val:= entry[3];
+          fi;
+        fi;
+      fi;
     fi;
-    entry[3]:= val;
-    pos:= Length( entry );
-    if PositionSublist( entry[ pos ], origin ) = fail then
-      if entry[ pos ] = "" then
-        entry[ pos ]:= origin;
-      else
-        entry[ pos ]:= Concatenation( entry[ pos ], ",", origin );
+    if mode <> "test" then
+      entry[3]:= val;
+      pos:= Length( entry );
+      if PositionSublist( entry[ pos ], origin ) = fail then
+        if entry[ pos ] = "" then
+          entry[ pos ]:= origin;
+        else
+          entry[ pos ]:= Concatenation( entry[ pos ], ",", origin );
+        fi;
       fi;
     fi;
 
     return true;
+end;
+
+
+#############################################################################
+##
+#F  OD_enter_values( <list>, <mode> )
+##
+##  Change 'OD_data' such that the entries in <list> get entered.
+##  Each entry is assumed to have the form '[ name, p, pos, val, origin ]'.
+##
+##  <mode> decides what happens in the case of an inconsistency.
+##
+OD_enter_values:= function( list, mode )
+    local entry, res;
+
+    for entry in list do
+      if Length( entry ) <> 5 then
+        Error( entry );
+      fi;
+      res:= CallFuncList( OD_enter_value, Concatenation( entry, [ mode ] ) );
+      if res = false then
+        Error( "OD_enter_value returned false" );
+      fi;
+    od;
 end;
 
 
@@ -578,12 +661,21 @@ end;
 ##  Return a Json format string describing the current contents of 'OD_data'.
 ##
 OD_string_data:= function()
-  local result, simpname, nams, name, p, cand, l;
+  local result, line, simpname, nams, name, p, cand, l;
 
   result:= "{\n\"date\":\"";
 
   Append( result, OD_data.date );
   Append( result, "\"," );
+
+  Append( result, "\n\"comment\":[" );
+  for line in OD_data.comment do
+    Append( result, "\n \"" );
+    Append( result, line );
+    Append( result, "\"," );
+  od;
+  Unbind( result[ Length( result ) ] );
+  Append( result, "\n]," );
 
   Append( result, "\n\"names\":" );
   Append( result, Concatenation( "[\"",

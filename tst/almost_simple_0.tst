@@ -19,8 +19,8 @@ gap> for simpname in OD_NamesOfSimpleAtlasTables( "M" ) do
 >    for name in Filtered( OD_NamesOfAlmostSimpleAtlasTables( simpname ),
 >                          x -> x <> simpname ) do
 >      t:= CharacterTable( name );
->      n:= NrConjugacyClasses( t );
 >      if t <> fail then
+>        n:= NrConjugacyClasses( t );
 >        subtbls:= Filtered( List( NamesOfFusionSources( t ), CharacterTable ),
 >            s -> s <> fail and
 >                 2 * Size( s ) = Size( t ) and

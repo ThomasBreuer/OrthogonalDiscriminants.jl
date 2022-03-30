@@ -2,7 +2,7 @@
 # (thus it will be fixed in GAP 4.12).
 if CompareVersionNumbers( GAPInfo.Version, "4.12" ) then
   Info( InfoOD, 1,
-        "the fix or FrobeniusCharacterValue is not needed anymore" );
+        "the fix for FrobeniusCharacterValue is not needed anymore" );
 fi;
 
 
@@ -155,4 +155,43 @@ BindGlobal( "FrobeniusCharacterValueFixed", function( value, p )
     # Return the Frobenius character value.
     return value;
 end );
+
+
+###############################################################################
+##
+##  Improve the behaviour of 'Indicator' in characteristic 2.
+##
+InstallMethod( IndicatorOp,
+    "for a Brauer character table and <n> = 2",
+    [ IsBrauerTable, IsHomogeneousList, IsPosInt ], 10,
+    function( modtbl, ibr, n )
+    local ind, princ, i;
+
+    if UnderlyingCharacteristic( modtbl ) <> 2 or ibr <> Irr( modtbl ) then
+      TryNextMethod();
+    fi;
+
+    ind:= [];
+    princ:= BlocksInfo( modtbl )[1].modchars;
+
+    for i in [ 1 .. Length( ibr ) ] do
+      if ibr[i] <> ComplexConjugate( ibr[i] ) then
+        # Non-real characters have indicator 0.
+        ind[i]:= 0;
+      elif not i in princ then
+        # Real characters outside the principal block have indicator 1.
+        ind[i]:= 1;
+      elif Set( ibr[i] ) = [ 1 ] then
+        # The trivial character is defined to have indicator 1.
+        ind[i]:= 1;
+      else
+        # Set 'Unknown()' for all other characters.
+        ind[i]:= Unknown();
+      fi;
+    od;
+
+    return ind;
+    end );
+#T Run a consistency check whether these criteria hold for the database,
+#T and whether we can improve known values for the database.
 

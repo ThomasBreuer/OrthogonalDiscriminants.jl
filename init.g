@@ -75,8 +75,9 @@ BindGlobal( "OD_data", JsonStringToGap( StringFile(
 ##  Read the functions.
 ##
 
-Read( Filename( OD_pkgdir, "gap/oddata.g" ) );
 Read( Filename( OD_pkgdir, "gap/fix.g" ) );
+Read( Filename( OD_pkgdir, "gap/utils.g" ) );
+Read( Filename( OD_pkgdir, "gap/oddata.g" ) );
 Read( Filename( OD_pkgdir, "gap/interface.g" ) );
 Read( Filename( OD_pkgdir, "gap/consistency.g" ) );
 if LoadPackage( "Browse", false ) = true then

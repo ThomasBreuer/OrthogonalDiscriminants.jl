@@ -19,9 +19,10 @@ gap> for simpname in OD_NamesOfSimpleAtlasTables( "M" ) do
 >          chi:= Irr( t )[i];
 >          if Indicator( t, [ chi ], 2 )[1] = 0 then
 >            discr:= OrthogonalDiscriminant( chi );
->            if not IsInt( AtlasIrrationality( discr ) ) then
+>            if not IsInt( discr ) then
 >              Add( result,
->                   [ Identifier( t ), OD_CharacterName( t, i ), i, discr ] );
+>                   [ Identifier( t ), OD_CharacterName( t, i ), i,
+>                     AtlasIrrationality( discr ) ] );
 >            fi;
 >          fi;
 >        od;
