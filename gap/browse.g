@@ -1,5 +1,31 @@
 #############################################################################
 ##
+#F  OD_SplitString( <string>, <sep> )
+##
+OD_SplitString:= function( string, sep )
+    local open, result, start, i;
+
+    open:= 0;
+    result:= [];
+    start:= 0;
+    for i in [ 1 .. Length( string ) ] do
+      if string[i] = '(' then
+        open:= open + 1;
+      elif string[i] = ')' then
+        open:= open - 1;
+      elif string[i] in sep and open = 0 then
+        Add( result, string{ [ start+1 .. i-1 ] } );
+        start:= i;
+      fi;
+    od;
+    Add( result, string{ [ start+1 .. Length( string ) ] } );
+
+    return result;
+end;
+
+
+#############################################################################
+##
 #F  BrowseOD( <name>[, <p>] )
 ##
 ##  Show a Browse table for the OD data of the group with name <name>,
@@ -274,7 +300,8 @@ BindGlobal( "BrowseODData", function()
           elif j = 8 then
             return [ Concatenation( "OD = ", t.work.main[ i/2 ][ j/2 ] ) ];
           elif j = 10 then
-            return [ Concatenation( "source = ", t.work.main[ i/2 ][ j/2 ].rows[1] ) ];
+            return List( OD_SplitString( t.work.main[ i/2 ][ j/2 ].rows[1], "," ),
+                         x -> Concatenation( "source = ", x ) );
           else
             Error( "this should not happen" );
           fi;
@@ -296,6 +323,13 @@ BindGlobal( "BrowseODData", function()
         SpecialGrid:= BrowseData.SpecialGridLineDraw,
       ),
     );
+
+    BrowseData.SetSortParameters( table, "column", 1,
+      [ "add counter on categorizing", "yes" ] );
+
+    BrowseData.SetSortParameters( table, "column", 5,
+      [ "hide on categorizing", "no",
+        "add counter on categorizing", "yes" ] );
 
     # Show the browse table.
     NCurses.BrowseGeneric( table );
