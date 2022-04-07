@@ -1,5 +1,75 @@
 #############################################################################
 ##
+#A  OrthogonalDiscriminants( <tbl> )
+##
+##  Return a list <M>l</M> such that <M>l[i]</M> is bound if and only if
+##  the <M>i</M>-th irreducible character of <A>tbl</A> has indicator
+##  <C>+</C> and even degree.
+##  The value at this position is <K>fail</K> if the orthogonal discriminant
+##  of the character is not stored in the Atlas of Orthogonal Discriminants,
+##  otherwise it is the string that is stored in this database.
+##
+DeclareAttribute( "OrthogonalDiscriminants", IsCharacterTable );
+
+InstallMethod( OrthogonalDiscriminants,
+    [ "IsCharacterTable" ],
+    function( tbl )
+    local p, name, result, data, ind, irr, i, reduce, entry, value, reduced;
+
+    p:= UnderlyingCharacteristic( tbl );
+    if p = 0 then
+      name:= Identifier( tbl );
+    else
+      name:= Identifier( OrdinaryCharacterTable( tbl ) );
+    fi;
+
+    result:= [];
+    data:= OD_Data( name );
+
+    if data = fail then
+      # Compute the positions of orthogonal irreducibles of even degree.
+      # (If some indicators are not known then we regard them as orthogonal.)
+      ind:= Indicator( tbl, 2 );
+      irr:= Irr( tbl );
+      for i in [ 1 .. Length( ind ) ] do
+        if irr[i, 1] mod 2 = 0 and not ind[i] in [ -1, 0 ] then
+          result[i]:= Unknown();
+        fi;
+      od;
+      return result;
+    elif IsBound( data.( p ) ) then
+      reduce:= false;
+      data:= data.( p );
+    else
+      # We know the value for 'p' iff we know it for '0'.
+      reduce:= true;
+      data:= data.( 0 );
+    fi;
+
+    for entry in data do
+      if ( not reduce ) or entry[3] = "?" then
+        result[ entry[2] ]:= entry[3];
+      else
+        # 'p' does not divide the group order,
+        # we reduce the value from characteristic 0.
+        value:= AtlasIrrationality( value );
+        reduced:= FrobeniusCharacterValueFixed( value, p );
+        if IsZero( reduced ) then
+Error( "choose a better representative (use number theory)" );
+        elif IsSquareInFiniteField( CharacterField( Irr( tbl )[ entry[2] ] ), reduced ) then
+          return "O+";
+        else
+          return "O-";
+        fi;
+      fi;
+    od;
+
+    return result;
+    end );
+
+
+#############################################################################
+##
 #F  OD_SizeOfFieldOfDefinition( <vals>, <p> )
 ##
 ##  Assume that the condition holds for all Galois conjugates of entries in
@@ -76,7 +146,7 @@ DeclareGlobalFunction( "OrthogonalDiscriminant" );
 ##  otherwise 'fail'.
 ##
 OrthogonalDiscriminantFromDatabase:= function( chi )
-    local modtbl, p, tbl, name, pos, data, reduce, entry, value;
+    local modtbl, p, tbl, name, pos, data, reduce, entry, value, reduced;
 
     modtbl:= UnderlyingCharacterTable( chi );
     p:= UnderlyingCharacteristic( modtbl );
@@ -115,8 +185,11 @@ OrthogonalDiscriminantFromDatabase:= function( chi )
     elif reduce then
       # 'p' does not divide the group order,
       # we reduce the value from characteristic 0.
-      if IsSquareInFiniteField( Field( Rationals, chi ),
-             FrobeniusCharacterValueFixed( AtlasIrrationality( value ), p ) ) then
+      value:= AtlasIrrationality( value );
+      reduced:= FrobeniusCharacterValueFixed( value, p );
+      if IsZero( reduced ) then
+Error( "choose a better representative (use number theory)" );
+      elif IsSquareInFiniteField( CharacterField( chi ), reduced ) then
         return "O+";
       else
         return "O-";
@@ -755,5 +828,99 @@ Print( "AGR repres. with strange character field: ", AtlasRepInfoRecord( G ), "\
     fi;
 
     return OrthogonalDiscriminantFromGenerators( F, G );
+end;
+
+
+#############################################################################
+##
+#F  OD_PrintTable( <tbl> )
+#F  OD_PrintTable( <chi> )
+#F  OD_PrintTable( <name> )
+##
+##  <chi>: ordinary irreducible orthogonal character
+##
+OD_PrintTable:= function( tbl )
+    local data, characters, ord, primes, modtbls, header, positions, result,
+          i, chipos, chi, red, resulti, j, p, dec, pos, bl, colwidth, hline, l;
+
+    if IsString( tbl ) then
+      tbl:= CharacterTable( tbl );
+      data:= OD_Data( Identifier( tbl ) );
+      characters:= Irr( tbl ){ List( data.0, l -> l[2] ) };
+    elif IsClassFunction( tbl ) then
+      characters:= [ tbl ];
+      tbl:= UnderlyingCharacterTable( chi );
+    elif IsCharacterTable( tbl ) then
+      data:= OD_Data( Identifier( tbl ) );
+      characters:= Irr( tbl ){ List( data.0, l -> l[2] ) };
+    else
+      Error( "<tbl> must be an (identifier of an) ordinary character table ",
+             "or an ordinary irreducible character" );
+    fi;
+
+    ord:= Size( tbl );
+    primes:= PrimeDivisors( ord );
+    modtbls:= List( primes, p -> tbl mod p );
+
+    header:= Concatenation( Identifier( tbl ), ":  ", StringPP( ord ) );
+    Print( "\n", header, "\n",
+           RepeatedString( "-", Length( header ) ), "\n\n" );
+
+    positions:= List( characters, chi -> Position( Irr( tbl ), chi ) );
+
+    header:= Concatenation( [ "i", "chi", "K", "disc" ],
+                            List( primes, String ) );
+
+    result:= [ header ];
+    for i in [ 1 .. Length( positions ) ] do
+      chipos:= positions[i];
+      chi:= characters[i];
+      red:= List( modtbls, m -> RestrictedClassFunction( chi, m ) );
+      resulti:= [ [ String( chipos ),
+                    OD_CharacterName( tbl, chipos ),
+                    StringOfCharacterField( chi ),
+                    First( data.0, l -> l[2] = chipos )[3] ],
+                  [ "", "", "", "" ] ];
+      for j in [ 1 .. Length( primes ) ] do
+        p:= primes[j];
+        if IsOrthogonallyStable( red[j] ) then
+          dec:= Decomposition( Irr( modtbls[j] ), [ red[j] ], "nonnegative" )[1];
+          pos:= PositionsProperty( dec, IsOddInt );
+          Add( resulti[1],
+               JoinStringsWithSeparator(
+                   List( pos, x -> OD_CharacterName( modtbls[j], x) ),
+                   "+" ) );
+          Add( resulti[2],
+               JoinStringsWithSeparator(
+                   List( pos, x -> First( data.( p ), r -> r[2] = x )[3] ),
+                   ", " ) );
+        else
+          bl:= PrimeBlocks( tbl, p );
+          if bl.defect[ bl.block[ chipos ] ] = 1 then
+            Add( resulti[1], "(def. 1)" );
+          else
+            Add( resulti[1], "" );
+          fi;
+          Add( resulti[2], "" );
+        fi;
+      od;
+      Append( result, resulti );
+    od;
+
+    colwidth:= List( TransposedMat( result ),
+                     c -> Maximum( List( c, Length ) ) );
+
+    hline:= RepeatedString( "-",
+                Sum( colwidth ) + 3 * Length( colwidth ) - 1 );
+    for i in [ 1 .. Length( result ) ] do
+      l:= result[i];
+      for j in [ 1 .. Length( l ) ] do
+        Print( String( l[j], colwidth[j] ), " | " );
+      od;
+      Print( "\n" );
+      if i mod 2 = 1 then
+        Print( hline, "\n" );
+      fi;
+    od;
 end;
 
