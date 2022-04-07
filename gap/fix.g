@@ -157,6 +157,14 @@ BindGlobal( "FrobeniusCharacterValueFixed", function( value, p )
 end );
 
 
+# The enhancement in question is in the GAP master branch
+# (thus it will be fixed in GAP 4.12).
+if CompareVersionNumbers( GAPInfo.Version, "4.12" ) then
+  Info( InfoOD, 1,
+        "the improvement for IndicatorOp is not needed anymore" );
+fi;
+
+
 ###############################################################################
 ##
 ##  Improve the behaviour of 'Indicator' in characteristic 2.
