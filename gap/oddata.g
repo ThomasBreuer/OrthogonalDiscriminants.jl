@@ -133,6 +133,11 @@ OD_scaffold_p:= function( ordt, p )
              i -> Irr( modt )[i][1] mod 2 = 0
                   and ind[i] = 1 );
 
+# We know an indicator + that is not known in the official CTblLib.
+if Identifier( modt ) = "R(27)mod2" and not 13 in cand then
+  cand:= Union( cand, [ 13 ] );
+fi;
+
   showS:= ( p = 2 and IsEvenInt( Number( Irr( ordt ), x -> x[1] = 1 ) ) );
   if showS then
     return List( cand, i -> [ OD_CharacterName( modt, i ), i, "?", "?", "" ] );
@@ -659,6 +664,9 @@ end;
 ##
 ##  Return a Json format string describing the current contents of 'OD_data'.
 ##
+##  If the global option 'simple' has the value 'true' then only information
+##  about simple groups is considered.
+##
 OD_string_data:= function()
   local result, line, simpname, nams, name, p, cand, l;
 
@@ -685,7 +693,9 @@ OD_string_data:= function()
     Append( result, "\n\"" );
     Append( result, simpname );
     Append( result, "\":{" );
-    if IsBound( OD_data.( simpname ).names ) then
+    if ValueOption( "simple" ) = true then
+      nams:= [ simpname ];
+    elif IsBound( OD_data.( simpname ).names ) then
       nams:= OD_data.( simpname ).names;
     else
       nams:= OD_NamesOfAlmostSimpleAtlasTables( simpname );
