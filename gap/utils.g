@@ -28,6 +28,22 @@ end;
 
 #############################################################################
 ##
+#F  StringOfCharacterField( <chi> )
+##
+StringOfCharacterField:= function( chi )
+    local F, gens;
+
+    F:= CharacterField( chi );
+    if IsRationals( F ) then
+      return "Q";
+    fi;
+    gens:= List( GeneratorsOfField( F ), CTblLib.StringOfAtlasIrrationality );
+
+    return Concatenation( "Q(", JoinStringsWithSeparator( gens, ", " ), ")" );
+end;
+
+#############################################################################
+##
 #F  IsSquareInFiniteField( <F>, <val> )
 ##
 ##  Let <F> be a finite field of odd order $q$, or an odd prime power $q$,
