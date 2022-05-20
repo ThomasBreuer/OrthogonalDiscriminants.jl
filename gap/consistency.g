@@ -31,7 +31,8 @@ OD_CheckPermutationCharacters:= function( name )
         s:= CharacterTable( sname );
         if s <> fail and
            ClassPositionsOfKernel( GetFusionMap( s, t ) ) = [ 1 ] and
-           IsOddInt( Size( t ) / Size( s ) ) then
+           IsOddInt( Size( t ) / Size( s ) ) and
+           not IsBrauerTable( s ) then
           pi:= TrivialCharacter( s )^t;
           chi:= pi - TrivialCharacter( t );
           pos:= Position( Irr( t ), chi );
@@ -276,9 +277,17 @@ end;
 ##  conjugate, in order to take products of ODs when forming norms.)
 ##
 OD_CheckAutomorphisms:= function( simpname, name )
-    local result, data, tbl, auttbls, p, modtbl, modauttbls, data_p,
-          roworbs, orb, orbdata, values, knownpos, knownvalues, entry, l,
-          newentry, pos, i;
+    local evalOD, result, data, tbl, auttbls, p, modtbl, modauttbls, data_p,
+          roworbs, orb, orbdata, values, knownpos, knownvalues, F, propose,
+          entry, l, newentry, pos, i, val;
+
+    evalOD:= function(x)
+      if x[3] = "?" then
+        return "?";
+      else
+        return AtlasIrrationality( x[3] );
+      fi;
+    end;
 
     result:= [];
 
@@ -319,7 +328,7 @@ OD_CheckAutomorphisms:= function( simpname, name )
             Error( "database not compatible with group automorphisms" );
           fi;
           if p = 0 then
-            values:= List( orbdata, x -> AtlasIrrationality( x[3] ) );
+            values:= List( orbdata, evalOD );
           else
             values:= List( orbdata, x -> x[3] );
           fi;
@@ -330,9 +339,17 @@ OD_CheckAutomorphisms:= function( simpname, name )
           fi;
           knownvalues:= Set( Filtered( values, x -> x <> "?" ) );
           if Length( knownvalues ) <> 1 then
-            # contradiction, but we cannot say which is wrong
-            Print( "#E  ", name, ", p = ", p, ": values ",
-                   knownvalues, " in an orbit under group automorphisms\n" );
+            # Check that the values are equal modulo squares;
+            # note that we want the feature that taking products of
+            # stored ODs yields norms if applicable.
+            F:= Field( Rationals, [ knownvalues[1] ] );
+            if ForAny( knownvalues{ [ 2 .. Length( knownvalues ) ] },
+                 x -> SquareRootInNumberField( F,
+                        x * knownvalues[1] ) = fail ) then
+              # contradiction, but we cannot say which is wrong
+              Print( "#E  ", name, ", p = ", p, ": values ",
+                     knownvalues, " in an orbit under group automorphisms\n" );
+            fi;
           else
             entry:= [ name, p,, values[ knownpos ],
                       Concatenation( "aut(", orbdata[ knownpos ][1], ")" ) ];
@@ -354,17 +371,27 @@ OD_CheckAutomorphisms:= function( simpname, name )
             Error( "database not compatible with field automorphisms" );
           fi;
           if p = 0 then
-            values:= List( orbdata, x -> AtlasIrrationality( x[3] ) );
-            if fail in values then
+            values:= List( orbdata, evalOD );
+            if "?" in values then
               if Length( Set( values ) ) > 1 then
                 Print( "#I  ", name, ", p = ", p, ": values ",
-                       values, " in an orbit under field automorphisms\n" );
+                       values, " in an orbit under field automorphisms:\n",
+                       "#I  ", orbdata, "\n" );
               fi;
             elif ForAny( [ 1 .. Length( values ) ],
-                         i -> GaloisCyc( values[1], orb[2][i] ) <> values[i] ) then
-              # contradiction, but we cannot say which is wrong
+                   i -> GaloisCyc( values[1], orb[2][i] ) <> values[i] ) then
+              # contradiction, but we cannot say which is wrong;
+              # propose consistent values based on the first value
+              propose:= StructuralCopy( orbdata );
+              val:= AtlasIrrationality( propose[1][3] );
+              for i in [ 2 .. Length( propose ) ] do
+                propose[i][3]:= CTblLib.StringOfAtlasIrrationality(
+                                    GaloisCyc( val, orb[2][i] ) );
+              od;
+              SortParallel( List( propose, l -> l[2] ), propose );
               Print( "#E  ", name, ", p = ", p, ": values ",
-                     values, " in an orbit under field automorphisms\n" );
+                     values, " in an orbit under field automorphisms\n",
+                     "#E  replace as follows:\n", propose, "\n" );
             fi;
           else
             # The OD must be constant on orbits.
@@ -373,8 +400,11 @@ OD_CheckAutomorphisms:= function( simpname, name )
               Print( "#E  ", name, ", p = ", p, ": values ",
                      values, " in an orbit under field automorphisms\n" );
             elif "?" in values and Length( Set( values ) ) > 1 then
+              # propose consistent values based on the first value
+              propose:= StructuralCopy( orbdata );
               Print( "#I  ", name, ", p = ", p, ": values ",
-                     values, " in an orbit under field automorphisms\n" );
+                     values, " in an orbit under field automorphisms:\n",
+                     "#I  ", orbdata, "\n" );
             fi;
           fi;
         od;
@@ -641,13 +671,13 @@ end;
 ##  Do the two ODs fit together?
 ##
 OD_CheckSubgroups:= function( name )
-    local result, t, data, sname, sdata, s, cand, rest, i, tentry, res, sres,
-          restpos, sentry, sval, tval, chi, psi, opos;
+    local result, ordt, data, sname, ords, p, t, s, cand, rest, i, tentry,
+          res, sres, restpos, sentry, sval, sdata, tval, chi, psi, opos, d;
 
     result:= [];
 
-    t:= CharacterTable( name );
-    if t = fail then
+    ordt:= CharacterTable( name );
+    if ordt = fail then
       return result;
     fi;
 
@@ -656,12 +686,25 @@ OD_CheckSubgroups:= function( name )
       return result;
     fi;
 
-    for sname in NamesOfFusionSources( t ) do
-      s:= CharacterTable( sname );
-      if s <> fail and
-         ClassPositionsOfKernel( GetFusionMap( s, t ) ) =  [ 1 ] then
-        cand:= Irr( t ){ List( data.0, l -> l[2] ) };
-#T TODO: p > 0
+    for sname in NamesOfFusionSources( ordt ) do
+      ords:= CharacterTable( sname );
+      if ords = fail or IsBrauerTable( ords ) or
+         ClassPositionsOfKernel( GetFusionMap( ords, ordt ) ) <>  [ 1 ] then
+        continue;
+      fi;
+      for p in List( RecNames( data ), Int ) do
+        if p = 0 then
+          t:= ordt;
+          s:= ords;
+        else
+          t:= ordt mod p;
+          s:= ords mod p;
+        fi;
+        if t = fail or s = fail then
+          continue;
+        fi;
+
+        cand:= Irr( t ){ List( data.( p ), l -> l[2] ) };
         rest:= RestrictedClassFunctions( cand, s );
 
         for i in [ 1 .. Length( rest ) ] do
@@ -669,72 +712,127 @@ OD_CheckSubgroups:= function( name )
           if sval <> fail then
             # The restriction to 's' is orth. stable,
             # and we can compute its discriminant.
-            sval:= CTblLib.StringOfAtlasIrrationality( sval );
-            Add( result, [ name, 0, data.0[i][2], sval,
+            if p = 0 then
+              sval:= CTblLib.StringOfAtlasIrrationality( sval );
+            elif sval = "O-" and IsEvenInt(
+                  DegreeOverPrimeField( CharacterField( cand[i] ) ) /
+                  DegreeOverPrimeField( CharacterField( rest[i] ) ) ) then
+              sval:= "O+";
+            fi;
+            Add( result, [ name, p, data.( p )[i][2], sval,
                            Concatenation( "ext(", sname, ")" ) ] );
           else
             # Perhaps info from the database about 's' helps.
             sdata:= OD_Data( sname );
             if sdata <> fail then
               for i in [ 1 .. Length( cand ) ] do
-                tentry:= data.0[i];
+                tentry:= data.( p )[i];
 
-                # Check for induction from index two subgroups.
+                # Check for induction from index two subgroups
+                # (works only if the characteristic if different from 2).
+                # Note that 'cand[i]' is a character of indicator +.
                 res:= OrthogonalDiscriminantFromIndexTwoSubgroup( cand[i], s );
                 if res <> fail and res[1] = "ind" then
-                  sres:= CTblLib.StringOfAtlasIrrationality( res[3] );
-                  Add( result, [ name, 0, data.0[i][2], sres,
+                  if p = 0 then
+                    sres:= CTblLib.StringOfAtlasIrrationality( res[3] );
+                  else
+                    sres:= res[3];
+                  fi;
+                  Add( result, [ name, p, data.( p )[i][2], sres,
                                  Concatenation( "ind(", sname, ")" ) ] );
                 fi;
 
                 # Check for extension from subgroups.
                 restpos:= Position( Irr( s ), rest[i] );
-                sentry:= First( sdata.0, l -> l[2] = restpos );
+                if IsBound( sdata.( p ) ) then
+                  sentry:= First( sdata.( p ), l -> l[2] = restpos );
+                else
+                  sentry:= fail;
+#T we can take an ordinary character!
+                fi;
                 if sentry <> fail then
                   # Compare the two values.
                   sval:= sentry[3];
                   tval:= tentry[3];
                   chi:= Irr( t )[ tentry[2] ];
                   psi:= Irr( s )[ restpos ];
+
                   if sval = "?" then
                     if tval <> "?" then
-                      # We can take the value if Field(psi) contains Field(chi).
-                      if IsSubset( Field( psi ), Field( chi ) ) then
-                        Add( result, [ sname, 0, restpos, tval,
+                      # We can take the value if the two character fields
+                      # are equal.
+                      # For p > 0, we can take a known "O-"
+                      # (and we know that the field extension is odd).
+                      if CharacterField( psi ) = CharacterField( chi ) then
+                        Add( result, [ sname, p, restpos, tval,
+                                       Concatenation( "rest(", name, ")" ) ] );
+                      elif p > 0 and tval = "O-" then
+                        if IsEvenInt(
+                             DegreeOverPrimeField( CharacterField( chi ) )
+                         / DegreeOverPrimeField( CharacterField( psi ) ) ) then
+                          Error( "incompatible restrictions" );
+                        fi;
+                        Add( result, [ sname, p, restpos, "O-",
                                        Concatenation( "rest(", name, ")" ) ] );
                       fi;
                     fi;
                   elif tval = "?" then
-                    # We can take the value if Field(chi) contains Field(psi).
-                    if IsSubset( Field( chi ), Field( psi ) ) then
-                      Add( result, [ name, 0, tentry[2], sval,
+                    # 'CharacterField(chi)' contains 'CharacterField(psi)'.
+                    if p = 0 or
+                       IsOddInt(
+                           DegreeOverPrimeField( CharacterField( chi ) )
+                         / DegreeOverPrimeField( CharacterField( psi ) ) ) then
+                      # We take the value of 'psi' if 'p = 0' or if
+                      # the field extension has odd degree.
+                      Add( result, [ name, p, tentry[2], sval,
+                                     Concatenation( "ext(", sname, ")" ) ] );
+                    else
+                      # We get "O+" if the field extension is even.
+                      Add( result, [ name, p, tentry[2], "O+",
                                      Concatenation( "ext(", sname, ")" ) ] );
                     fi;
                   else
-                    if tval = sval then
-                      # Both values are stored.
-                      # Add a comment about verification only if no 'ext'/'rest'
-                      # comments are available for the two directions.
-                      opos:= Length( sentry );
-                      if IsSubset( Field( psi ), Field( chi ) ) then
-                        if PositionSublist( sentry[ opos ],
-                               Concatenation( "rest(", name, ")" ) ) = fail then
-                          Add( result, [ sname, 0, restpos, tval,
-                                         Concatenation( "rest(", name, ")" ) ] );
+                    # Both values are stored.
+                    if p = 0 then
+                      if tval = sval then
+                        # Add a comment about verification only if no 'ext'/'rest'
+                        # comments are available for the two directions.
+                        opos:= Length( sentry );
+                        if IsSubset( Field( psi ), Field( chi ) ) then
+                          if PositionSublist( sentry[ opos ],
+                                 Concatenation( "rest(", name, ")" ) ) = fail then
+                            Add( result, [ sname, p, restpos, tval,
+                                           Concatenation( "rest(", name, ")" ) ] );
+                          fi;
+                        elif IsSubset( Field( chi ), Field( psi ) ) then
+                          if PositionSublist( tentry[ opos ],
+                                 Concatenation( "ext(", sname, ")" ) ) = fail then
+                            Add( result, [ name, p, tentry[2], sval,
+                                           Concatenation( "ext(", sname, ")" ) ] );
+                          fi;
                         fi;
-                      elif IsSubset( Field( chi ), Field( psi ) ) then
-                        if PositionSublist( tentry[ opos ],
-                               Concatenation( "ext(", sname, ")" ) ) = fail then
-                          Add( result, [ name, 0, tentry[2], sval,
-                                         Concatenation( "ext(", sname, ")" ) ] );
-                        fi;
-                      fi;
-                    else
+                      else
 #T There may be a problem.
 #T We could try to decide whether
 #T they differ by a square (in some field) ...
 #T And we should present some examples.
 # Print( "different discr. for ", sentry, " and ", tentry, "\n" );
+                      fi;
+                    else  # p > 0
+                      if sval = "O-" then
+                        # 'tval' is "O-" iff the field ext. is odd
+                        d:= DegreeOverPrimeField( CharacterField( chi ) )
+                         / DegreeOverPrimeField( CharacterField( psi ) );
+                        if ( tval = "O-" and IsEvenInt( d ) ) or
+                           ( tval = "O+" and IsOddInt( d ) ) then
+                          Error( "incompatible restrictions" );
+                        fi;
+                      elif sval = "O+" then
+                        # 'tval' must be "O+"
+                        if tval = "O-" then
+                          Error( "incompatible restrictions" );
+                        fi;
+                      fi;
                     fi;
                   fi;
                 fi;
@@ -742,7 +840,7 @@ OD_CheckSubgroups:= function( name )
             fi;
           fi;
         od;
-      fi;
+      od;
     od;
 
     return result;
@@ -798,6 +896,84 @@ OD_Check_AGR_Groups:= function( name )
         od;
       fi;
     od;
+
+    return result;
+end;
+
+# find characters of subgroups from which 'chi' is induced
+OD_InducedFrom:= function( chi )
+    local modtbl, p, ordtbl, res, maxname, s, mods, deg, cand;
+
+    modtbl:= UnderlyingCharacterTable( chi );
+    p:= UnderlyingCharacteristic( modtbl );
+    if p = 0 then
+      ordtbl:= modtbl;
+    else
+      ordtbl:= OrdinaryCharacterTable( modtbl );
+    fi;
+
+    res:= [];
+
+    if not HasMaxes( ordtbl ) then
+      # We give up.
+      return res;
+    fi;
+
+    for maxname in Maxes( ordtbl ) do
+      s:= CharacterTable( maxname );
+      if p <> 0 then
+        mods:= s mod p;
+      else
+        mods:= s;
+      fi;
+      deg:= chi[1] / Index( ordtbl, s );
+      if IsInt( deg ) and mods <> fail then
+        for cand in Irr( mods ) do
+          if cand[1] = deg and InducedClassFunction( cand, modtbl ) = chi then
+            Add( res, cand );
+          fi;
+        od;
+      fi;
+    od;
+
+    return res;
+end;
+
+# If an orthogonal character is induced from an orthogonal character
+# of a subgroup of odd index, and if the two character fields are equal
+# then the orthogonal discriminants are equal.
+OD_CheckImprimitiveCharacters:= function( name )
+    local result, data, t, entry, chi, cand, OD, s, new;
+
+    result:= [];
+    data:= OD_Data( name );
+    if data = fail then
+      return result;
+    fi;
+    data:= data.0;
+    t:= CharacterTable( name );
+    if t <> fail then
+      for entry in data do
+        chi:= Irr(t)[ entry[2] ];
+        for cand in OD_InducedFrom( chi ) do
+          s:= UnderlyingCharacterTable( cand );
+          if CharacterField( chi ) = CharacterField( cand )
+             and IsOddInt( Index( t, s ) ) then
+            OD:= OrthogonalDiscriminant( cand );
+            if OD <> fail then
+              new:= [ name, 0, entry[2], String(OD),
+                      Concatenation( "ind(", Identifier( s ), ")" ) ];
+              if not new in result then
+                Add( result, new );
+              fi;
+#T else
+#T Error( "failure for ", [ name, entry, cand ], "\n" );
+#T # check more cases whether we can improve!
+            fi;
+          fi;
+        od;
+      od;
+    fi;
 
     return result;
 end;

@@ -70,50 +70,6 @@ Error( "choose a better representative (use number theory)" );
 
 #############################################################################
 ##
-#F  OD_SizeOfFieldOfDefinition( <vals>, <p> )
-##
-##  Assume that the condition holds for all Galois conjugates of entries in
-##  <vals>.
-##
-OD_SizeOfFieldOfDefinition:= function( vals, p )
-    local values, entry, q;
-
-    # The first argument may be a list of cyclotomics.
-    if   ForAll( vals, IsInt ) then
-      return p;
-    elif not ( IsList( vals ) and IsCyclotomicCollection( vals ) ) then
-      Error( "<vals> must be a list of cyclotomics" );
-    fi;
-
-    values:= [];
-    for entry in vals do
-      if DenominatorCyc( entry ) mod p = 0 or
-         Conductor( entry ) mod p = 0 then
-        return fail;
-      elif not IsRat( entry ) then
-        Add( values, entry );
-      fi;
-    od;
-
-    if ForAll( values, x -> IsCycInt( ( GaloisCyc( x, p ) - x ) / p ) ) then
-      # All reductions lie in the prime field.
-      return p;
-    else
-      # It is sufficient to look at powers of the map '*p'.
-      q:= p;
-      while true do
-        q:= q * p;
-        if ForAll( values,
-                   x -> IsCycInt( ( GaloisCyc( x, q ) - x ) / p ) ) then
-          return q;
-        fi;
-      od;
-    fi;
-end;
-
-
-#############################################################################
-##
 #F  OD_SquareFreePart( <val> )
 ##
 OD_SquareFreePart:= function( val )
@@ -156,6 +112,7 @@ OrthogonalDiscriminantFromDatabase:= function( chi )
       tbl:= OrdinaryCharacterTable( modtbl );
     fi;
     name:= Identifier( tbl );
+#T switch to a library table if necessary!
 
     pos:= Position( Irr( modtbl ), chi );
     if pos = fail then
@@ -219,7 +176,7 @@ OrthogonalDiscriminantFromEigenvalues:= function( chi )
     t:= UnderlyingCharacterTable( chi );
     p:= UnderlyingCharacteristic( t );
     if p = 2 then
-      Error( "only for characteristic <> 2" );
+      return fail;
     fi;
 
     nccl:= NrConjugacyClasses( t );
@@ -258,13 +215,38 @@ end;
 ##
 #F  OrthogonalDiscriminantIndicator0( <chi> )
 ##
-##  Let <chi> be an absolutely irreducible ordinary character
+##  Let <chi> be an absolutely irreducible ordinary or Brauer character
 ##  that is not real-valued.
 ##  The function returns the orthogonal discriminant
-##  of '<chi> + ComplexConjugate( <chi> )', as a cyclotomic integer.
+##  of '<chi> + ComplexConjugate( <chi> )',
+##  either as a cyclotomic integer (in characteristic zero)
+##  or as one of the strings "O+", "O-" (in positive characteristic).
 ##
 OrthogonalDiscriminantIndicator0:= function( chi )
-    local F, K, Q, d, d2, gen, delta, X, R, i;
+    local tbl, p, F, K, Q, d, d2, gen, delta, X, R, i;
+
+    # For Brauer characters, it may happen that the character fields of
+    # 'chi' and 'chi + \overline{chi}' are equal,
+    # and then Theorem 10 yields "O+".
+    # Otherwise, apply Prop. 2.9.
+    tbl:= UnderlyingCharacterTable( chi );
+    p:= UnderlyingCharacteristic( tbl );
+    if p > 0 then
+      F:= CharacterField( chi );
+      K:= CharacterField( chi + ComplexConjugate( chi ) );
+      if F = K then
+        # happens for example for L3(2), degree 3, lives over GF(2)
+        return "O+";
+      else
+        # We have "O+" iff the degree of 'chi' is even.
+        # (also for odd characteristic!)
+        if IsEvenInt( chi[1] ) then
+          return "O+";
+        else
+          return "O-";
+        fi;
+      fi;
+    fi;
 
     # If chi(1) is even then the discr. is 1.
     if chi[1] mod 2 = 0 then
@@ -301,7 +283,7 @@ OrthogonalDiscriminantIndicator0:= function( chi )
     F:= First( Subfields( F ), x -> Dimension(x) = d2 );
     K:= Intersection( F, K );
 
-    # Construct an element in F with real square.
+    # Construct a nonreal element in F with real square.
     gen:= PrimitiveElement( F );
     delta:= ( gen - ComplexConjugate( gen ) )^2;
 
@@ -313,12 +295,14 @@ end;
 ##
 #F  OrthogonalDiscriminantFromIndexTwoSubgroup( <chi>, <s> )
 ##
-##  Is the ordinary irreducible character <chi>
+##  Is the (ordinary or Brauer) irreducible character <chi>
+##  (which is assumed to have even degree and indicator +)
 ##  induced from a character of the index 2 subgroup whose character table is
 ##  <s>, or does it extend a character from <s>?
 ##
 OrthogonalDiscriminantFromIndexTwoSubgroup:= function( chi, s )
-    local tbl, classes, fus, rest, const, F, K, dchi, Q, sigma, x, d;
+    local tbl, classes, fus, rest, irr, dec, const, F, K, p, dchi, Q, sigma,
+          x, d;
 
     tbl:= UnderlyingCharacterTable( chi );
     if Size( tbl ) <> 2 * Size( s ) then
@@ -327,85 +311,120 @@ OrthogonalDiscriminantFromIndexTwoSubgroup:= function( chi, s )
     classes:= SizesConjugacyClasses( tbl );
     fus:= GetFusionMap( s, tbl );
     rest:= chi{ fus };
-    const:= Filtered( Irr( s ),
-                x -> ( x[1] = chi[1] or 2 * x[1] = chi[1] ) and
-                     ScalarProduct( s, x, rest ) <> 0 );
-    F:= Field( Rationals, chi );
-    K:= Field( Rationals, const[1] );
+    irr:= Irr( s );
+    dec:= Decomposition( irr, [ rest ], "nonnegative" )[1];
+    const:= Irr( s ){ Filtered( [ 1 .. Length( dec ) ], i -> dec[i] <> 0 ) };
+    F:= CharacterField( chi );
+    K:= CharacterField( const[1] );
+    p:= UnderlyingCharacteristic( tbl );
 
     if IsZero( chi{ Difference( [ 1 .. Length( classes ) ], fus ) } ) then
       # chi is induced from s
-      Assert( 1, Length( const ) = 2 );
-      if F = K then
-        # The determinant is 1, according to Thm. 6.10 (a).
-        if chi[1] mod 4 = 2 then
-          return [ "ind", const[1], -1 ];
-        else
-          return [ "ind", const[1], 1 ];
-        fi;
-      elif ForAny( GeneratorsOfField( K ),
-                   x -> x <> ComplexConjugate( x ) ) then
-        # 'rest' splits into two complex conjugates.
-        # Theorem 6.10 (d) says that we compute the discriminant
-        # from any of the constituents.
-        return [ "ind", const[1],
-                 OrthogonalDiscriminantIndicator0( const[1] ) ];
-      elif const[1][1] mod 2 = 0 then
-        dchi:= OrthogonalDiscriminant( const[1] );
-        if dchi <> fail and dchi <> 0 then
-#T when can 0 occur?
-          # Theorem 6.10 (b), we know the discr. of the restriction,
-          # compute its norm. (The sign does not matter here.)
-          return [ "ind", const[1],
-                   OD_SquareFreePart( Norm( K, F, dchi ) ) ];
-        fi;
-      fi;
-
-      if ForAny( Difference( [ 1 .. Length( classes ) ], fus ),
-                     i -> OrdersClassRepresentatives( tbl )[i] = 2 ) then
-        # split extension G:2
-        # Theorem 6.10 (c); no sign change.
-        if const[1][1] mod 2 = 0 then
-          return [ "ind", const[1], 1 ];
-        fi;
-
-        # Compute c \in F with K = F(Sqrt(c)).
-        # Here the sign must be changed.
-        Q:= First( Subfields( K ),
-                   x -> Dimension( x ) = 2 and not IsSubset( F, x ) );
-        if Q <> fail then
-          # We can choose c from a quadratic extension of the Rationals.
-          return [ "ind", const[1],
-                   - Quadratic( PrimitiveElement( Q ) ).root ];
-        else
-          # Compute a field autom. sigma of K that fixes F.
-          sigma:= First( PrimeResidues( Conductor( K ) ),
-                    i -> ForAll( GeneratorsOfField( F ),
-                           x -> GaloisCyc( x, i ) = x ) and
-                                ForAny( GeneratorsOfField( K ),
-                                  x -> GaloisCyc( x, i ) <> x ) );
-          # Now x-x^sigma is in K\F, and the square is in F.
-          x:= PrimitiveElement( K );
-          return [ "ind", const[1], - ( x - GaloisCyc( x, sigma ) )^2 ];
-        fi;
-      else
-        # non-split extension
+      if p = 2 then
+        # Theorem 6.12 is not applicable.
         return fail;
       fi;
-    else
-      # 'chi' extends from 's' to 'tbl',
-      # we can take the discriminant of the restriction.
-      # The character field of chi can be larger than that
-      # of the restriction;
-      # in this case, we may find a nicer form (modulo squares in the
-      # larger field).
-      Assert( 1, Length( const ) = 1 );
-      d:= OrthogonalDiscriminant( const[1] );
-      if d <> fail and not IsInt( d ) then
-        Info( InfoOD, 1,
-              "chance to improve discriminant ", d, "?" );
+      Assert( 1, Length( const ) = 2 );
+      if p = 0 then
+        # Apply Thm. 6.10.
+        if F = K then
+          # The determinant is 1, according to Thm. 6.10 (a).
+          if chi[1] mod 4 = 2 then
+            return [ "ind", const[1], -1 ];
+          else
+            return [ "ind", const[1], 1 ];
+          fi;
+        elif ForAny( GeneratorsOfField( K ),
+                     x -> x <> ComplexConjugate( x ) ) then
+          # 'rest' splits into two complex conjugates.
+          # Theorem 6.10 (d) says that we compute the discriminant
+          # from any of the constituents.
+          return [ "ind", const[1],
+                   OrthogonalDiscriminantIndicator0( const[1] ) ];
+        elif const[1][1] mod 2 = 0 then
+          dchi:= OrthogonalDiscriminant( const[1] );
+          if dchi <> fail and dchi <> 0 then
+#T when can 0 occur?
+            # Theorem 6.10 (b), we know the discr. of the restriction,
+            # compute its norm. (The sign does not matter here.)
+            return [ "ind", const[1],
+                     OD_SquareFreePart( Norm( K, F, dchi ) ) ];
+          fi;
+        fi;
+
+        if ForAny( Difference( [ 1 .. Length( classes ) ], fus ),
+                       i -> OrdersClassRepresentatives( tbl )[i] = 2 ) then
+          # split extension G:2
+          # Theorem 6.10 (c); no sign change.
+          if const[1][1] mod 2 = 0 then
+            return [ "ind", const[1], 1 ];
+          fi;
+
+          # Compute c \in F with K = F(Sqrt(c)).
+          # Here the sign must be changed.
+          Q:= First( Subfields( K ),
+                     x -> Dimension( x ) = 2 and not IsSubset( F, x ) );
+          if Q <> fail then
+            # We can choose c from a quadratic extension of the Rationals.
+            return [ "ind", const[1],
+                     - Quadratic( PrimitiveElement( Q ) ).root ];
+          else
+            # Compute a field autom. sigma of K that fixes F.
+            sigma:= First( PrimeResidues( Conductor( K ) ),
+                      i -> ForAll( GeneratorsOfField( F ),
+                             x -> GaloisCyc( x, i ) = x ) and
+                                  ForAny( GeneratorsOfField( K ),
+                                    x -> GaloisCyc( x, i ) <> x ) );
+            # Now x-x^sigma is in K\F, and the square is in F.
+            x:= PrimitiveElement( K );
+            return [ "ind", const[1], - ( x - GaloisCyc( x, sigma ) )^2 ];
+          fi;
+        else
+          # non-split extension
+          return fail;
+        fi;
+      else  # p > 0
+        # Apply Thm. 6.12:
+        # (c): If the constituent has even degree and indicator +,
+        #      and if the group extension is split, we get "O+".
+        # (d): If the constituent has even degree and indicator o,
+        #      we get "O+".
+        if IsEvenInt( const[1][1] ) then
+          if ForAny( const[1], x -> x <> GaloisCyc( x, -1 ) ) then
+            return [ "ind", const[1], "O+" ];
+          elif Indicator( s, 2 )[ Position( Irr( s ), const[1] ) ] = 1 and
+               ForAny( Difference( [ 1 .. Length( classes ) ], fus ),
+                       i -> OrdersClassRepresentatives( tbl )[i] = 2 ) then
+            return [ "ind", const[1], "O+" ];
+          fi;
+        fi;
       fi;
-      return [ "ext", const[1], d ];
+    else
+      # 'chi' extends from 's' to 'tbl'.
+      Assert( 1, Length( const ) = 1 );
+      if p = 0 then
+        # We can take the discriminant of the restriction.
+        # The character field of 'chi' can be larger than that
+        # of the restriction;
+        # in this case (in characteristic 0),
+        # we may find a nicer form (modulo squares in the larger field).
+        d:= OrthogonalDiscriminant( const[1] );
+        if d <> fail and p = 0 and not IsInt( d ) then
+          Info( InfoOD, 1,
+                "chance to improve discriminant ", d, "?" );
+        fi;
+        return [ "ext", const[1], d ];
+      elif IsEvenInt( DegreeOverPrimeField( F ) / DegreeOverPrimeField( K ) ) then
+        # The character field of 'chi' is an even extension of the
+        # character field of 'const[1]', we get "O+".
+        return [ "ind", const[1], "O+" ];
+      else
+        # We take the discriminant of the restriction.
+        d:= OrthogonalDiscriminant( const[1] );
+        if d <> fail then
+          return [ "ind", const[1], d ];
+        fi;
+      fi;
     fi;
 
     return fail;
@@ -422,22 +441,24 @@ end;
 ##  the orthogonal discriminant of <chi>, as a cyclotomic integer.
 ##
 OrthogonalDiscriminantIndicatorPlus:= function( chi )
-    local tbl, sname, s, result, rest, info;
+    local tbl, sname, s, result, rest, info, ker, fus, fact, libfact, tr,
+          pos, cand;
 
     if chi[1] mod 2 = 1 then
       # We are not interested in characters of indicator + and odd degree.
       return 0;
     fi;
 
-    tbl:= UnderlyingCharacterTable( chi );
-    if UnderlyingCharacteristic( tbl ) <> 0 then
-      Error( "only for ordinary characters" );
-    fi;
-
     # Is there an element without eigenvalues \pm 1?
+    # (works in characteristic different from 2)
     result:= OrthogonalDiscriminantFromEigenvalues( chi );
     if result <> fail then
       return result;
+    fi;
+
+    tbl:= UnderlyingCharacterTable( chi );
+    if UnderlyingCharacteristic( tbl ) <> 0 then
+      return fail;
     fi;
 
     # Is the character induced from a normal subgroup of index 2,
@@ -449,7 +470,8 @@ OrthogonalDiscriminantIndicatorPlus:= function( chi )
         s:= CharacterTable( sname );
         if s <> fail and
            2 * Size( s ) = Size( tbl ) and
-           ClassPositionsOfKernel( GetFusionMap( s, tbl ) ) = [ 1 ] then
+           ClassPositionsOfKernel( GetFusionMap( s, tbl ) ) = [ 1 ] and
+           not IsBrauerTable( s ) then
           result:= OrthogonalDiscriminantFromIndexTwoSubgroup( chi, s );
           if result <> fail then
             return result[3];
@@ -463,7 +485,8 @@ OrthogonalDiscriminantIndicatorPlus:= function( chi )
     for sname in NamesOfFusionSources( tbl ) do
       s:= CharacterTable( sname );
       if s <> fail and
-         ClassPositionsOfKernel( GetFusionMap( s, tbl ) ) = [ 1 ] then
+         ClassPositionsOfKernel( GetFusionMap( s, tbl ) ) = [ 1 ] and
+         not IsBrauerTable( s ) then
         rest:= RestrictedClassFunction( chi, s );
         info:= OrthogonalDiscriminant( rest );
         if info <> fail then
@@ -471,6 +494,38 @@ OrthogonalDiscriminantIndicatorPlus:= function( chi )
         fi;
       fi;
     od;
+
+    # Try to factor out the kernel of the character.
+    ker:= ClassPositionsOfKernel( chi );
+    if Length( ker ) > 1 then
+      fus:= First( ComputedClassFusions( tbl ),
+                   r -> ClassPositionsOfKernel( r.map ) = ker );
+      if fus <> fail and CharacterTable( fus.name ) <> fail then
+        # The fusion to the factor is stored, take the library table.
+        fact:= CharacterTable( fus.name );
+        chi:= InducedClassFunctionsByFusionMap( tbl, fact, [ chi ], fus.map )[1];
+        return OrthogonalDiscriminantIndicatorPlus( chi );
+      else
+        # Try to find a library table of the factor.
+        # This table may store useful (subgroup) information.
+        fact:= tbl / ker;
+        chi:= InducedClassFunctionsByFusionMap( tbl, fact, [ chi ], GetFusionMap( tbl, fact ) )[1];
+        libfact:= NameOfEquivalentLibraryCharacterTable( fact );
+        if libfact <> fail then
+          libfact:= CharacterTable( libfact );
+          tr:= TransformingPermutationsCharacterTables( fact, libfact );
+          pos:= Position( Irr( fact ), chi )^tr.rows;
+          cand:= Orbit( AutomorphismsOfTable( libfact ),
+                        Irr( libfact )[ pos ], Permuted );
+          cand:= List( cand, OrthogonalDiscriminantIndicatorPlus );
+          if Length( Set( cand ) ) > 1 then
+Print( "#E  unsymmetric criteria?\n" );
+          fi;
+Print( "result from factoring out!\n" );
+          return cand[1];
+        fi;
+      fi;
+    fi;
 
     # We were not successful.
     return fail;
@@ -549,7 +604,7 @@ OrthogonalDiscriminantInfo:= function( chi... )
         continue;
       fi;
 
-      if IsBound( galoisinfo[i] ) then
+      if p = 0 and IsBound( galoisinfo[i] ) then
         # Choose a Galois compatible discriminant.
         known:= First( result, r -> r.position = galoisinfo[i][1] );
         if known <> fail then
@@ -581,15 +636,17 @@ OrthogonalDiscriminantInfo:= function( chi... )
           fi;
         fi;
       else
-        # Provide the Galois info for later characters.
-        FF:= CharacterField( irr[i] );
-        for g in GaloisGroup( AsField( Intersection( F, FF ), FF ) ) do
-          img:= OnTuples( irr[i], g );
-          pos:= Position( irr, img );
-          if pos > i then
-            galoisinfo[ pos ]:= [ i, g!.galois ];
-          fi;
-        od;
+        if p = 0 then
+          # Provide the Galois info for later characters.
+          FF:= CharacterField( irr[i] );
+          for g in GaloisGroup( AsField( Intersection( F, FF ), FF ) ) do
+            img:= OnTuples( irr[i], g );
+            pos:= Position( irr, img );
+            if pos > i then
+              galoisinfo[ pos ]:= [ i, g!.galois ];
+            fi;
+          od;
+        fi;
 
         # Deal with this constituent.
         if ind[i] = 0 then
@@ -599,7 +656,7 @@ OrthogonalDiscriminantInfo:= function( chi... )
             Add( result,
                  rec( position:= [ i, pos ],
                       value:= OrthogonalDiscriminantIndicator0( irr[i] ),
-                      field:= Field( irr[i] + irr[ pos ] ),
+                      field:= CharacterField( irr[i] + irr[ pos ] ),
                       why:= "pair of complex conjugate characters" ) );
           fi;
         elif ind[i] = -1 then
@@ -607,7 +664,7 @@ OrthogonalDiscriminantInfo:= function( chi... )
           Add( result,
                rec( position:= i,
                     value:= 1,
-                    field:= Field( irr[i] ),
+                    field:= CharacterField( irr[i] ),
                     why:= "[Braun/Nebe, Remark 3.1]" ) );
         else
           # The value may be stored in the database.
@@ -617,7 +674,7 @@ OrthogonalDiscriminantInfo:= function( chi... )
               Add( result,
                    rec( position:= i,
                         value:= AtlasIrrationality( val ),
-                        field:= Field( irr[i] ),
+                        field:= CharacterField( irr[i] ),
                         why:= "stored in the database" ) );
               continue;
             fi;
@@ -629,13 +686,13 @@ OrthogonalDiscriminantInfo:= function( chi... )
             Add( result,
                  rec( position:= i,
                       value:= val,
-                      field:= Field( irr[i] ),
+                      field:= CharacterField( irr[i] ),
                       why:= "OrthogonalDiscriminantIndicatorPlus" ) );
           else
             Add( result,
                  rec( position:= i,
                       value:= fail,
-                      field:= Field( irr[i] ),
+                      field:= CharacterField( irr[i] ),
                       why:= "sorry ..." ) );
           fi;
         fi;
@@ -659,7 +716,7 @@ end;
 ##  otherwise the database of orthogonal discriminants is used if possible.
 ##
 InstallGlobalFunction( OrthogonalDiscriminant, function( chi )
-    local info, F;
+    local info, dchi, mult, r, dpsi;
 
     info:= OrthogonalDiscriminantInfo( chi );
     if not IsList( info ) then
@@ -668,8 +725,35 @@ InstallGlobalFunction( OrthogonalDiscriminant, function( chi )
       return info[1].value;
     elif ForAll( info, r -> r.value <> fail ) then
       # All values are known, we are done.
-      return OD_SquareFreePart( Product( info, r -> r.value ) );
-#T better form norms where Galois orbits occur.
+      if UnderlyingCharacteristic( UnderlyingCharacterTable( chi ) ) = 0 then
+        # Note that in characteristic zero, compatible discriminants are chosen
+        # for Galois conjugate constituents, thus 'Product' computes norms.
+        return OD_SquareFreePart( Product( info, r -> r.value ) );
+      else
+        # Do not form norms but take the inverse of the degrees of the
+        # field extensions as weights.
+        # (For 'chi' over GF(p), k values 'O-' for constituents over GF(p^k)
+        # together yield one 'O-' for 'chi'.)
+        dchi:= DegreeOverPrimeField( CharacterField( chi ) );
+        mult:= 0;
+        for r in Filtered( info, r -> r.value = "O-" ) do
+          dpsi:= DegreeOverPrimeField( r.field );
+          if dchi mod dpsi = 0 then
+            if IsOddInt( dchi / dpsi ) then
+              mult:= mult + 1;
+            fi;
+          else
+            mult:= mult + Gcd( dchi, dpsi ) / dpsi;
+          fi;
+        od;
+        if not IsInt( mult ) then
+          Error( "strange restriction" );
+        elif IsOddInt( mult ) then
+          return "O-";
+        else
+          return "O+";
+        fi;
+      fi;
     fi;
 
     Info( InfoOD, 2,
@@ -797,37 +881,87 @@ end;
 #F  OrthogonalDiscriminantFromAGR( <chi> )
 ##
 OrthogonalDiscriminantFromAGR:= function( chi )
-    local G, F, M;
+    local G, F, tbl, p, ordtbl, name, infos, signs, r, M;
 
     G:= AtlasGroup( Character, chi );
-    if G = fail then
-#T the character cannot be identified yet;
-#T check whether the available repres. allow us to conclude the value for chi;
-#T e.g., if all of the given degree are in an orbit under group autom. then
-#T we can take any of them!
-      return fail;
-    fi;
-    F:= AtlasRepInfoRecord( G ).ring;
-    if IsIntegers( F ) then
-      F:= Rationals;
+    if G <> fail then
+      # The character was already identified.
+      F:= AtlasRepInfoRecord( G ).ring;
+      if IsIntegers( F ) then
+        F:= Rationals;
+      fi;
+
+      # In odd characteristic, we have to make sure that 'F' is
+      # an odd degree extension of the character field.
+      # In characteristic 2, we accept only representations over the
+      # character field.
+      # In characteristic 0, we can work with field extensions
+      # because the determinant of the form in question lies in the
+      # character field.
+      if F <> CharacterField( chi ) then
+        if Characteristic( F ) = 2 or
+           ( IsOddInt( Characteristic( F ) ) and IsEvenInt( Dimension( F ) / Dimension( CharacterField( chi ) ) ) ) then
+  Print( "AGR repres. with strange character field: ", AtlasRepInfoRecord( G ), "\n" );
+          return fail;
+        fi;
+      fi;
+      return OrthogonalDiscriminantFromGenerators( F, G );
     fi;
 
-    # In odd characteristic, we have to make sure that 'F' is
-    # an odd degree extension of the character field.
-    # In characteristic 2, we accept only representations over the
-    # character field.
-    # In characteristic 0, we can work with field extensions
-    # because the determinant of the form in question lies in the
-    # character field.
-    if F <> CharacterField( chi ) then
-      if Characteristic( F ) = 2 or
-         ( IsOddInt( Characteristic( F ) ) and IsEvenInt( Dimension( F ) / Dimension( CharacterField( chi ) ) ) ) then
-Print( "AGR repres. with strange character field: ", AtlasRepInfoRecord( G ), "\n" );
+    # Check whether the available representations allow us to
+    # identify 'chi' and to conclude the value for 'chi',
+    # using some heuristics.
+    tbl:= UnderlyingCharacterTable( chi );
+    p:= UnderlyingCharacteristic( tbl );
+    if p = 0 then
+      ordtbl:= tbl;
+    else
+      ordtbl:= OrdinaryCharacterTable( tbl );
+    fi;
+    name:= Identifier( ordtbl );
+    infos:= AllAtlasGeneratingSetInfos( name, Characteristic, p,
+                Dimension, chi[1] );
+    if Length( infos ) = 0 or not chi in Irr( tbl ) or p = 0 then
       return fail;
+#T are there cases with p = 0 that would be interesting?
+    fi;
+
+    if Number( Irr( tbl ), x -> x[1] = chi[1] ) = 1 then
+#T or if unique up to group automorphisms?
+#T and take only those infos that have the correct character field? (careful)
+      signs:= [];
+      for r in infos do
+        G:= AtlasGroup( r );
+        if G <> fail then
+          F:= AtlasRepInfoRecord( G ).ring;
+          if IsIntegers( F ) then
+            F:= Rationals;
+          fi;
+
+          if F <> CharacterField( chi ) then
+            if Characteristic( F ) = 2 or
+               ( IsOddInt( Characteristic( F ) ) and IsEvenInt( Dimension( F ) / Dimension( CharacterField( chi ) ) ) ) then
+              Print( "AGR repres. with strange character field: ", AtlasRepInfoRecord( G ), "\n" );
+              continue;
+            fi;
+          fi;
+          M:= GModuleByMats( GeneratorsOfGroup( G ), F );
+          if not MTX.IsAbsolutelyIrreducible( M ) then
+            continue;
+          fi;
+          Add( signs, MTX.OrthogonalSign( M ) );
+        fi;
+      od;
+      if Length( signs ) = 1 then
+        # We have found the sign of an abs. irreducible module of degree
+        # 'chi[1]', and there is exactly one such irr. character for 'G'.
+        return signs[1];
+      elif Length( signs ) > 1 then
+        Error( "how can this happen?" );
       fi;
     fi;
 
-    return OrthogonalDiscriminantFromGenerators( F, G );
+    return fail;
 end;
 
 
@@ -835,13 +969,20 @@ end;
 ##
 #F  OD_PrintTable( <tbl> )
 #F  OD_PrintTable( <chi> )
-#F  OD_PrintTable( <name> )
+#F  OD_PrintTable( <name>[, false] )
 ##
 ##  <chi>: ordinary irreducible orthogonal character
+##  If 'false' is given as second argument then the table gets constructed
+##  but not printed.
 ##
-OD_PrintTable:= function( tbl )
+OD_PrintTable:= function( tbl, print... )
     local data, characters, ord, primes, modtbls, header, positions, result,
-          i, chipos, chi, red, resulti, j, p, dec, pos, bl, colwidth, hline, l;
+          i, chipos, chi, red, resulti, j, p, stable, dec, pos, res1, res2,
+          k, ppos, cc, bl, colwidth, hline, l;
+
+    # Just compute the table without printing it if 'print' is 'false'
+    # (for testing purposes).
+    print:= not ( Length( print ) = 1 and print[1] = false );
 
     if IsString( tbl ) then
       tbl:= CharacterTable( tbl );
@@ -863,8 +1004,10 @@ OD_PrintTable:= function( tbl )
     modtbls:= List( primes, p -> tbl mod p );
 
     header:= Concatenation( Identifier( tbl ), ":  ", StringPP( ord ) );
-    Print( "\n", header, "\n",
-           RepeatedString( "-", Length( header ) ), "\n\n" );
+    if print then
+      Print( "\n", header, "\n",
+             RepeatedString( "-", Length( header ) ), "\n\n" );
+    fi;
 
     positions:= List( characters, chi -> Position( Irr( tbl ), chi ) );
 
@@ -875,7 +1018,6 @@ OD_PrintTable:= function( tbl )
     for i in [ 1 .. Length( positions ) ] do
       chipos:= positions[i];
       chi:= characters[i];
-      red:= List( modtbls, m -> RestrictedClassFunction( chi, m ) );
       resulti:= [ [ String( chipos ),
                     OD_CharacterName( tbl, chipos ),
                     StringOfCharacterField( chi ),
@@ -883,25 +1025,57 @@ OD_PrintTable:= function( tbl )
                   [ "", "", "", "" ] ];
       for j in [ 1 .. Length( primes ) ] do
         p:= primes[j];
-        if IsOrthogonallyStable( red[j] ) then
-          dec:= Decomposition( Irr( modtbls[j] ), [ red[j] ], "nonnegative" )[1];
-          pos:= PositionsProperty( dec, IsOddInt );
-          Add( resulti[1],
-               JoinStringsWithSeparator(
-                   List( pos, x -> OD_CharacterName( modtbls[j], x) ),
-                   "+" ) );
-          Add( resulti[2],
-               JoinStringsWithSeparator(
-                   List( pos, x -> First( data.( p ), r -> r[2] = x )[3] ),
-                   ", " ) );
-        else
-          bl:= PrimeBlocks( tbl, p );
-          if bl.defect[ bl.block[ chipos ] ] = 1 then
-            Add( resulti[1], "(def. 1)" );
-          else
-            Add( resulti[1], "" );
-          fi;
+        if modtbls[j] = fail then
+          # We do not know the 'p'-Brauer table.
+          Add( resulti[1], "?" );
           Add( resulti[2], "" );
+        else
+          red:= RestrictedClassFunction( chi, modtbls[j] );
+          stable:= IsOrthogonallyStable( red );
+          if stable = true then
+            dec:= Decomposition( Irr( modtbls[j] ), [ red ], "nonnegative" )[1];
+            pos:= PositionsProperty( dec, IsOddInt );
+            res1:= [];
+            res2:= [];
+            for k in pos do
+              ppos:= First( data.( p ), r -> r[2] = k );
+              if ppos <> fail then
+                # must be indicator '+'
+                Add( res1, OD_CharacterName( modtbls[j], k ) );
+                Add( res2, ppos[3] );
+              else
+                cc:= Position( Irr( modtbls[j] ),
+                               ComplexConjugate( Irr( modtbls[j] )[k] ) );
+                if cc > k then
+                  # indicator 'o'
+                  Add( res1, Concatenation( OD_CharacterName( modtbls[j], k ),
+                               Filtered( OD_CharacterName( modtbls[j], cc ),
+                                         IsAlphaChar ) ) );
+                  Add( res2, OrthogonalDiscriminantIndicator0(
+                                 Irr( modtbls[j] )[k] ) );
+                elif cc = k then
+                  # indicator is *unknown*;
+                  # note that indicator '-' (disc is "O+") cannot occur here
+                  Add( res1, OD_CharacterName( modtbls[j], k ) );
+                  Add( res2, "?" );
+                fi;
+              fi;
+            od;
+            Add( resulti[1], JoinStringsWithSeparator( res1, "+" ) );
+            Add( resulti[2], JoinStringsWithSeparator( res2, ", " ) );
+          elif stable = fail then
+            # The indicator for at least one constituent is not known.
+            Add( resulti[1], "?" );
+            Add( resulti[2], "" );
+          else
+            bl:= PrimeBlocks( tbl, p );
+            if bl.defect[ bl.block[ chipos ] ] = 1 then
+              Add( resulti[1], "(def. 1)" );
+            else
+              Add( resulti[1], "" );
+            fi;
+            Add( resulti[2], "" );
+          fi;
         fi;
       od;
       Append( result, resulti );
@@ -914,12 +1088,14 @@ OD_PrintTable:= function( tbl )
                 Sum( colwidth ) + 3 * Length( colwidth ) - 1 );
     for i in [ 1 .. Length( result ) ] do
       l:= result[i];
-      for j in [ 1 .. Length( l ) ] do
-        Print( String( l[j], colwidth[j] ), " | " );
-      od;
-      Print( "\n" );
-      if i mod 2 = 1 then
-        Print( hline, "\n" );
+      if print then
+        for j in [ 1 .. Length( l ) ] do
+          Print( String( l[j], colwidth[j] ), " | " );
+        od;
+        Print( "\n" );
+        if i mod 2 = 1 then
+          Print( hline, "\n" );
+        fi;
       fi;
     od;
 end;

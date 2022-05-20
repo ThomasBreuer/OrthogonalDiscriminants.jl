@@ -5,16 +5,15 @@
 gap> SizeScreen( [ 72 ] );;
 gap> START_TEST( "subgroups.tst" );
 
-##
+##  Collect and evaluate the result.
 gap> result:= [];;
 gap> for simpname in OD_data.names do
 >    for name in OD_NamesOfAlmostSimpleAtlasTables( simpname ) do
->      Append( result, OD_CheckSubgroups( name ) );
+>      res:= OD_CheckSubgroups( name );
+>      OD_enter_values( res, "error" );
+>      Append( result, res );
 >    od;
 >  od;
-
-##  Evaluate the result.
-gap> OD_enter_values( result, "error" );
 
 ##
 gap> STOP_TEST( "subgroups.tst" );

@@ -524,6 +524,7 @@ end;
 ##  information is new.
 ##
 ##  <val> must be a *string* that describes the OD in question.
+##  If <val> is equal to "?" then the function does nothing.
 ##
 ##  If <mode> is given then it determines how to handle inconsistencies,
 ##  that is, an attempt to replace a known value by a different one.
@@ -544,7 +545,7 @@ end;
 ##  The default for <mode> is "error".
 ##
 OD_enter_value:= function( name, p, charnr, val, origin, mode... )
-    local pos, simpname, data, entry, F;
+    local pos, simpname, data, entry, F, orig;
 
     pos:= Position( name, '.' );
     if pos = fail then
@@ -587,6 +588,10 @@ OD_enter_value:= function( name, p, charnr, val, origin, mode... )
     fi;
     if entry[3] <> "?" then
       # Do we want to replace a known value by another one?
+      # If evaluating 'val' yields the value that is stored or a value
+      # in the same square class then we *keep the stored value*.
+      # This way we make sure that consistency between Galois conjugates
+      # does not get accidentally destroyed.
       if p > 0 then
         if entry[3] <> val then
           # The two values are incompatible.
@@ -610,24 +615,28 @@ OD_enter_value:= function( name, p, charnr, val, origin, mode... )
             Error( "inconsistency" );
           fi;
         else
-          # Take the "nicer" string description, in the sense that
-          # it has a shorter string representation.
-          if Length( entry[3] ) <= Length( val ) then
-            val:= entry[3];
-          fi;
+          # Keep the stored value.
+          val:= entry[3];
+        fi;
+      else
+        # We keep the value but we take the shorter string description.
+        if Length( entry[3] ) <= Length( val ) then
+          val:= entry[3];
         fi;
       fi;
     fi;
     if mode <> "test" then
       entry[3]:= val;
       pos:= Length( entry );
-      if PositionSublist( entry[ pos ], origin ) = fail then
-        if entry[ pos ] = "" then
-          entry[ pos ]:= origin;
-        else
-          entry[ pos ]:= Concatenation( entry[ pos ], ",", origin );
+      for orig in SplitString( origin, "," ) do
+        if orig <> "" and PositionSublist( entry[ pos ], orig ) = fail then
+          if entry[ pos ] = "" then
+            entry[ pos ]:= orig;
+          else
+            entry[ pos ]:= Concatenation( entry[ pos ], ",", orig );
+          fi;
         fi;
-      fi;
+      od;
     fi;
 
     return true;
@@ -655,6 +664,32 @@ OD_enter_values:= function( list, mode )
         Error( "OD_enter_value returned false" );
       fi;
     od;
+end;
+
+
+# Turn a record obtained from reading some 'odresults.json' into a list
+# that can be fed into 'OD_data' via 'OD_enter_values'.
+# (This is useful for merging different versions of 'odresults.json'.)
+OD_data_to_list:= function( r )
+    local result, name, rr, nname, p, entry;
+
+    result:= [];
+    for name in r.names do
+      rr:= r.( name );
+      for nname in rr.names do
+        for p in RecNames( rr.( nname ) ) do
+          for entry in rr.( nname ).( p ) do
+            if entry[3] <> "?" then
+              Add( result,
+                   [ nname, Int( p ), entry[2], entry[3],
+                     entry[ Length( entry ) ] ] );
+            fi;
+          od;
+        od;
+      od;
+    od;
+
+    return result;
 end;
 
 
