@@ -420,13 +420,18 @@ end;
 #F  OD_CheckLiftableCharacters( <name> )
 ##
 ##  Collect the information about liftable p-modular irreducible characters
-##  of the character table for <name>, for odd p:
+##  of the character table for <name>.
 ##  Does the stored p-modular OD (O+ or O-) coincide with the OD obtained by
 ##  p-modular reduction of the ordinary OD?
+##  For odd p, we have O+ iff the p-modular reduction of the ordinary OD
+##  is a square in the character field, and O- otherwise.
+##  For p = 2, if the character in question is rational then
+##  the ordinary OD is congruent to either 1 or -3 modulo 8,
+##  and we have O+ in the former case, and O- in the latter.
 ##
 OD_CheckLiftableCharacters:= function( name )
     local result, t, data, p, modt, rest, entry, chi, pos, q, i, F, N, qq,
-          ord, ordval, val, ODs, v, d, newentry;
+          ord, ordval, val, ODs, v, d, newentry, entry0, OD0;
 
     result:= [];
 
@@ -440,19 +445,51 @@ OD_CheckLiftableCharacters:= function( name )
       return result;
     fi;
 
-    for p in Filtered( PrimeDivisors( Size( t ) ), IsOddInt ) do
-      if IsBound( data.( p ) ) then
-        modt:= t mod p;
-        rest:= RestrictedClassFunctions( Irr( t ), modt );
-        for entry in data.( p ) do
-          chi:= Irr( modt )[ entry[2] ];
-          pos:= Positions( rest, chi );
-          if pos <> [] then
-            # 'chi' lifts to characteristic zero
-            # (We are interested only in orthogonal lifts
-            # for which we know the OD.)
-            pos:= Intersection( pos, List( data.( 0 ), l -> l[2] ) );
+    for p in PrimeDivisors( Size( t ) ) do
+      if not IsBound( data.( p ) ) then
+        continue;
+      fi;
 
+      modt:= t mod p;
+      rest:= RestrictedClassFunctions( Irr( t ), modt );
+      for entry in data.( p ) do
+        chi:= Irr( modt )[ entry[2] ];
+        pos:= Positions( rest, chi );
+        if pos <> [] then
+          # 'chi' lifts to characteristic zero
+          # (We are interested only in orthogonal lifts
+          # for which we know the OD.)
+          pos:= Intersection( pos, List( data.( 0 ), l -> l[2] ) );
+
+          if p = 2 then
+            # If the lift is rational we can relate the two ODs.
+            ODs:= [];
+            for i in [ 1 .. Length( pos ) ] do
+              if ForAll( Irr( t )[ pos[i] ], IsInt ) then
+                # The ordinary OD is congruent to 1 or -3 mod 8.
+                entry0:= First( data.( 0 ), l -> l[2] = pos[i] );
+                OD0:= entry0[3];
+                if OD0 = "?" then
+                  continue;
+                fi;
+                OD0:= Int( OD0 );
+                if OD0 = fail then
+                  Error( "nonintegral OD for rational character?" );
+                elif OD0 mod 8 = 1 then
+                  AddSet( ODs, "O+" );
+                elif OD0 mod 8 = 5 then
+                  AddSet( ODs, "O-" );
+                else
+                  Error( "wrong congruence for OD of rational character" );
+                fi;
+              fi;
+            od;
+            if Length( ODs ) > 1 then
+              Error( "inconsistent reductions of ordinary OD" );
+            elif Length( ODs ) <> 0 then
+              Add( result, [ name, p, entry[2], ODs[1], "lift" ] );
+            fi;
+          else
             # Check that the 'p'-modular reduction of the character field
             # of the ordinary character (where we disregard the ramified part
             # of the extension) is an odd degree extension of the
@@ -524,8 +561,8 @@ OD_CheckLiftableCharacters:= function( name )
               fi;
             fi;
           fi;
-        od;
-      fi;
+        fi;
+      od;
     od;
 
     return result;
