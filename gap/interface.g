@@ -1023,6 +1023,9 @@ OD_PrintTable:= function( tbl, print... )
                     StringOfCharacterField( chi ),
                     First( data.0, l -> l[2] = chipos )[3] ],
                   [ "", "", "", "" ] ];
+      if chi[1] mod 4 = 2 and resulti[1][4] = "?" then
+        resulti[1][4]:= "-?";
+      fi;
       for j in [ 1 .. Length( primes ) ] do
         p:= primes[j];
         if modtbls[j] = fail then
