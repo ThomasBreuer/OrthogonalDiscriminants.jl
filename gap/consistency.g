@@ -978,3 +978,31 @@ OD_CheckImprimitiveCharacters:= function( name )
     return result;
 end;
 
+
+#############################################################################
+##
+#F  OD_CheckSymmetricGroup( <n> )
+##
+##  Compute the determinants of Gram matrices of invariant bilinear forms
+##  of characters of the symmetric group of degree <n>
+##  via the formula of Jantzen and Schaper.
+##
+OD_CheckSymmetricGroup:= function( n )
+  local name, t, paras, result, entry, val, OD;
+
+  name:= Concatenation( "S", String( n ) );
+  t:= CharacterTable( name );
+  paras:= List( CharacterParameters( t ), l -> l[2] );
+  result:= [];
+  for entry in OD_Data( Identifier( t ) ).0 do
+    val:= GramDeterminant( paras[ entry[2] ] );
+    OD:= Product( Filtered( val, x -> IsOddInt( x[2] ) ), x -> x[1] );
+    if Irr( t )[ entry[2] ][1] mod 4 = 2 then
+      OD:= - OD;
+    fi;
+    Add( result, [ Identifier( t ), 0, entry[2], String( OD ), "specht" ] );
+  od;
+
+  return result;
+end;
+

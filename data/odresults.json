@@ -1,12 +1,13 @@
 {
-"date":"30.5.2022",
+"date":"03.06.2022",
 "comment":[
  "The flags in the last column mean the following:",
  "- AGR: verified using the Atlas of Group Representations",
  "- order: group order divides only one order of a relevant O+/O- group",
  "- permchar: chi+1 is a 2-trans. permutation character",
  "- lift: the p-modular OD arises from the ordinary OD",
- "- ev: there is a group element without eigenvalues +-1"
+ "- ev: there is a group element without eigenvalues +-1",
+ "- specht: verified using the Jantzen-Schaper formula"
 ],
 "names":["A5","L3(2)","A6","L2(8)","L2(11)","L2(13)","L2(17)","A7","L2(19)","L2(16)","L3(3)","U3(3)","L2(23)","L2(25)","M11","L2(27)","L2(29)","L2(31)","L3(4)","A8","U4(2)","Sz(8)","L2(32)","L2(49)","U3(4)","M12","U3(5)","J1","A9","L2(81)","L3(5)","M22","J2","S4(4)","S6(2)","A10","L3(7)","U4(3)","G2(3)","S4(5)","U3(8)","U3(7)","L4(3)","L5(2)","M23","U5(2)","L3(8)","2F4(2)'","A11","Sz(32)","L3(9)","U3(9)","HS","J3","U3(11)","O8+(2)","O8-(2)","3D4(2)","A12","M24","G2(4)","McL","A13","He","O7(3)","S6(3)","G2(5)","U6(2)","R(27)","L6(2)","S8(2)","Ru","Suz","ON","Co3","O8+(3)","O8-(3)","O10+(2)","O10-(2)","Co2"],
 "A5":{
@@ -21,9 +22,9 @@
   "5":[]},
  "A5.2":{
   "0":[
-   ["6a",3,"-5","ind(A5),ext(5:4)"],
-   ["4a",4,"5","permchar,ev,ext(A5),ext(5:4)"],
-   ["4b",5,"5","ev,permchar,ext(A5),ext(5:4)"]],
+   ["6a",3,"-5","ind(A5),ext(5:4),specht"],
+   ["4a",4,"5","permchar,ev,ext(A5),ext(5:4),specht"],
+   ["4b",5,"5","ev,permchar,ext(A5),ext(5:4),specht"]],
   "2":[
    ["4b",3,"O-","S-","RP,order"]],
   "3":[
@@ -8680,18 +8681,18 @@
    ["10296b",83,"5","ext(A12.2),ext(A13),specht"],
    ["11440a",84,"1","ext(A12.2),ext(A13),specht"],
    ["11440b",85,"1","ext(A12.2),ext(A13),specht"],
-   ["12012a",88,"?",""],
-   ["12012b",89,"?",""],
-   ["12012c",90,"?",""],
-   ["12012d",91,"?",""],
-   ["12870a",92,"?",""],
-   ["12870b",93,"?",""],
-   ["17160a",96,"?",""],
-   ["17160b",97,"?",""],
-   ["20592a",98,"105","ext(A12.2),ext(A13)"],
-   ["20592b",99,"105","ext(A12.2),ext(A13)"],
-   ["21450a",100,"?",""],
-   ["21450b",101,"?",""]],
+   ["12012a",88,"5","specht"],
+   ["12012b",89,"5","specht"],
+   ["12012c",90,"5","specht"],
+   ["12012d",91,"5","specht"],
+   ["12870a",92,"-1","specht"],
+   ["12870b",93,"-1","specht"],
+   ["17160a",96,"1","specht"],
+   ["17160b",97,"1","specht"],
+   ["20592a",98,"105","ext(A12.2),ext(A13),specht"],
+   ["20592b",99,"105","ext(A12.2),ext(A13),specht"],
+   ["21450a",100,"-21","specht"],
+   ["21450b",101,"-21","specht"]],
   "2":[
    ["12a",2,"O-","S-","RP,order"],
    ["64a",3,"O+","S+","RP,ext(A12.2),ext(S11x2),ext(S10xS3),ext(S9xS4),ext(S8xS5),ext(S7xS6)"],

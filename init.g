@@ -79,6 +79,7 @@ Read( Filename( OD_pkgdir, "gap/fix.g" ) );
 Read( Filename( OD_pkgdir, "gap/utils.g" ) );
 Read( Filename( OD_pkgdir, "gap/oddata.g" ) );
 Read( Filename( OD_pkgdir, "gap/interface.g" ) );
+Read( Filename( OD_pkgdir, "gap/GramDeterminant.g" ) );
 Read( Filename( OD_pkgdir, "gap/consistency.g" ) );
 if LoadPackage( "Browse", false ) = true then
   Read( Filename( OD_pkgdir, "gap/browse.g" ) );
