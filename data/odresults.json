@@ -1,5 +1,5 @@
 {
-"date":"13.09.2022",
+"date":"20.09.2022",
 "comment":[
  "The flags in the last column mean the following:",
  "- AGR: verified using the Atlas of Group Representations",
@@ -17661,7 +17661,7 @@
    ["626a",3,"O+","AGR,ext(3^4:2(A4xA4).4),ext(U3(8).3_1)"],
    ["6326a",5,"O+","RP"],
    ["8152a",6,"O+","ext(3^4:2(A4xA4).4)"],
-   ["84798a",10,"?",""],
+   ["84798a",10,"O+","RP"],
    ["170258a",13,"?",""],
    ["2131250a",20,"?",""],
    ["2375000a",21,"O+","lift"],
